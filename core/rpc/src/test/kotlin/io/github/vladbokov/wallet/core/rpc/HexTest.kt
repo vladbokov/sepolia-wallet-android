@@ -39,6 +39,20 @@ class HexTest {
     }
 
     @Test
+    fun `double prefix is rejected`() {
+        assertFailsWith<IllegalArgumentException> { "0x0x5".hexToBigInteger() }
+        assertFailsWith<IllegalArgumentException> { "0x0X5".hexToBigInteger() }
+        assertFailsWith<IllegalArgumentException> { "0X0x5".hexToBigInteger() }
+    }
+
+    @Test
+    fun `non-ascii digits are rejected`() {
+        assertFailsWith<IllegalArgumentException> { "0x５２".hexToBigInteger() }
+        assertFailsWith<IllegalArgumentException> { "0x٣".hexToBigInteger() }
+        assertFailsWith<IllegalArgumentException> { "0xＡ".hexToBigInteger() }
+    }
+
+    @Test
     fun `encodes without leading zeros`() {
         assertEquals("0x0", BigInteger.ZERO.toHexQuantity())
         assertEquals("0x5208", BigInteger.valueOf(21_000).toHexQuantity())
