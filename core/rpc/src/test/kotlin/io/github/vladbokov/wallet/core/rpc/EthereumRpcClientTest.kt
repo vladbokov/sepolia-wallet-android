@@ -317,7 +317,101 @@ class EthereumRpcClientTest {
         assertEquals(0, server.requestCount)
     }
 
+    @Test
+    fun `sendRawTransaction posts the signed hex and returns the hash`() = runTest {
+        result(HASH)
+
+        assertEquals(HASH, client.sendRawTransaction("0x02f8"))
+
+        val body = takeBody()
+        assertEquals("eth_sendRawTransaction", body.getValue("method").jsonPrimitive.content)
+        assertEquals(listOf("0x02f8"), body.getValue("params").jsonArray.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `sendRawTransaction surfaces a node rejection`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"nonce too low"}}""")
+
+        val e = assertFailsWith<JsonRpcException.Node> { client.sendRawTransaction("0x02f8") }
+
+        assertEquals("nonce too low", e.message)
+    }
+
+    @Test
+    fun `sendRawTransaction rejects a malformed hash in the response`() = runTest {
+        result("0x1234")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.sendRawTransaction("0x02f8") }
+    }
+
+    @Test
+    fun `sendRawTransaction rejects invalid input without calling the node`() = runTest {
+        assertFailsWith<IllegalArgumentException> { client.sendRawTransaction("0x") }
+        assertFailsWith<IllegalArgumentException> { client.sendRawTransaction("02f8") }
+        assertFailsWith<IllegalArgumentException> { client.sendRawTransaction("0x02f") }
+
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `receipt is null while the transaction is not in a block`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":null}""")
+
+        assertNull(client.getTransactionReceipt(HASH))
+    }
+
+    @Test
+    fun `receipt of a successful transaction`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"status":"0x1","blockNumber":"0x10","gasUsed":"0x5208"}}""")
+
+        val receipt = client.getTransactionReceipt(HASH)
+
+        assertEquals(TransactionReceipt(success = true, blockNumber = BigInteger.valueOf(16)), receipt)
+        assertEquals(listOf(HASH), takeBody().getValue("params").jsonArray.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `receipt of a reverted transaction`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"status":"0x0","blockNumber":"0x11"}}""")
+
+        assertEquals(
+            TransactionReceipt(success = false, blockNumber = BigInteger.valueOf(17)),
+            client.getTransactionReceipt(HASH),
+        )
+    }
+
+    @Test
+    fun `receipt without status or block number is malformed`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"blockNumber":"0x10"}}""")
+        enqueue("""{"jsonrpc":"2.0","id":2,"result":{"status":"0x1"}}""")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.getTransactionReceipt(HASH) }
+        assertFailsWith<JsonRpcException.Malformed> { client.getTransactionReceipt(HASH) }
+    }
+
+    @Test
+    fun `receipt with an unknown status is malformed`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"status":"0x2","blockNumber":"0x10"}}""")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.getTransactionReceipt(HASH) }
+    }
+
+    @Test
+    fun `receipt that is not an object is malformed`() = runTest {
+        result("0x1")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.getTransactionReceipt(HASH) }
+    }
+
+    @Test
+    fun `getTransactionReceipt rejects a malformed hash without calling the node`() = runTest {
+        assertFailsWith<IllegalArgumentException> { client.getTransactionReceipt("0x1234") }
+
+        assertEquals(0, server.requestCount)
+    }
+
     private companion object {
+        const val HASH = "0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"
         const val ADDRESS = "0x0123456789abcdef0123456789abcdef01234567"
         const val OTHER_ADDRESS = "0x89abcdef0123456789abcdef0123456789abcdef"
     }

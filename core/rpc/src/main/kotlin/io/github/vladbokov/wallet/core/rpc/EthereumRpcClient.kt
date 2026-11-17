@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Typed wrapper over the Ethereum execution-layer JSON-RPC API.
  * Reads account state (balance, nonce), the inputs of an EIP-1559 fee (gas estimate, base fee, priority fee)
- * and performs read-only contract calls.
+ * and performs read-only contract calls. Broadcasts signed transactions and tracks them by their receipt.
  *
  * Failures of the call itself are reported as [JsonRpcException]; transport failures stay `IOException`.
  */
@@ -110,10 +110,47 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
             },
             JsonPrimitive("latest"),
         )
-        if (result !is JsonPrimitive || !result.isString || !HEX_DATA.matches(result.content)) {
-            throw JsonRpcException.Malformed("Expected hex data in eth_call response")
+        return hexResult("eth_call", result, HEX_DATA, "hex data")
+    }
+
+    /**
+     * Broadcasts a signed, RLP-encoded transaction and returns its hash. The node never sees the key:
+     * it only receives bytes that are already signed.
+     *
+     * Not safe to blindly retry: if the first attempt reached the node but the response was lost (timeout),
+     * a retry fails with "already known" or "nonce too low" although the transaction was broadcast.
+     * After such an error check [getTransactionReceipt] with the hash computed from the signed bytes
+     * before treating the send as failed.
+     * @param signedTransactionHex `0x`-prefixed hex of the signed transaction.
+     * @throws IllegalArgumentException if [signedTransactionHex] is not non-empty hex data.
+     */
+    suspend fun sendRawTransaction(signedTransactionHex: String): String {
+        require(signedTransactionHex.length > 2 && HEX_DATA.matches(signedTransactionHex)) {
+            "Invalid signed transaction hex"
         }
-        return result.content
+        val hash = required("eth_sendRawTransaction", JsonPrimitive(signedTransactionHex))
+        return hexResult("eth_sendRawTransaction", hash, HASH, "a 32-byte hash")
+    }
+
+    /**
+     * Receipt of a transaction, or null while the node does not know it in a block yet
+     * (not mined, or still in the mempool).
+     * @param transactionHash 32-byte hash, `0x` + 64 hex digits.
+     * @throws IllegalArgumentException if [transactionHash] is not in that format.
+     */
+    suspend fun getTransactionReceipt(transactionHash: String): TransactionReceipt? {
+        require(HASH.matches(transactionHash)) { "Invalid transaction hash: '$transactionHash'" }
+        val receipt = request("eth_getTransactionReceipt", JsonPrimitive(transactionHash)) ?: return null
+        if (receipt !is JsonObject) {
+            throw JsonRpcException.Malformed("Expected a receipt object in eth_getTransactionReceipt response")
+        }
+        val status = parseQuantity("eth_getTransactionReceipt", receipt.field("status"))
+        val blockNumber = parseQuantity("eth_getTransactionReceipt", receipt.field("blockNumber"))
+        return when (status) {
+            BigInteger.ONE -> TransactionReceipt(success = true, blockNumber = blockNumber)
+            BigInteger.ZERO -> TransactionReceipt(success = false, blockNumber = blockNumber)
+            else -> throw JsonRpcException.Malformed("Unknown receipt status $status")
+        }
     }
 
     private suspend fun quantity(method: String, vararg params: JsonElement): BigInteger =
@@ -161,6 +198,17 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
         }
     }
 
+    /** Reads a string result that must match [format]; [what] names the expected value in the error message. */
+    private fun hexResult(method: String, element: JsonElement, format: Regex, what: String): String {
+        if (element !is JsonPrimitive || !element.isString || !format.matches(element.content)) {
+            throw JsonRpcException.Malformed("Expected $what in $method response")
+        }
+        return element.content
+    }
+
+    private fun JsonObject.field(name: String): JsonElement =
+        this[name] ?: throw JsonRpcException.Malformed("Receipt has no $name")
+
     private fun requireAddress(address: String) {
         require(ADDRESS.matches(address)) { "Invalid address: '$address'" }
     }
@@ -168,5 +216,6 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
     private companion object {
         val ADDRESS = Regex("0x[0-9a-fA-F]{40}")
         val HEX_DATA = Regex("0x([0-9a-fA-F]{2})*")
+        val HASH = Regex("0x[0-9a-fA-F]{64}")
     }
 }
