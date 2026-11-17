@@ -1,6 +1,7 @@
 package io.github.vladbokov.wallet.core.rpc
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -16,6 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class EthereumRpcClientTest {
 
@@ -174,7 +176,149 @@ class EthereumRpcClientTest {
         assertFailsWith<IOException> { client.chainId() }
     }
 
+    @Test
+    fun `getTransactionCount asks for the pending block`() = runTest {
+        result("0x7")
+
+        assertEquals(BigInteger.valueOf(7), client.getTransactionCount(ADDRESS))
+
+        val body = takeBody()
+        assertEquals("eth_getTransactionCount", body.getValue("method").jsonPrimitive.content)
+        assertEquals(listOf(ADDRESS, "pending"), body.getValue("params").jsonArray.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun `getTransactionCount rejects an invalid address without calling the node`() = runTest {
+        assertFailsWith<IllegalArgumentException> { client.getTransactionCount("0x1") }
+
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `estimateGas sends a call object with hex value`() = runTest {
+        result("0x5208")
+
+        val gas = client.estimateGas(ADDRESS, OTHER_ADDRESS, BigInteger.TEN.pow(18))
+
+        assertEquals(BigInteger.valueOf(21_000), gas)
+        val call = takeBody().getValue("params").jsonArray.single().jsonObject
+        assertEquals(ADDRESS, call.getValue("from").jsonPrimitive.content)
+        assertEquals(OTHER_ADDRESS, call.getValue("to").jsonPrimitive.content)
+        assertEquals("0xde0b6b3a7640000", call.getValue("value").jsonPrimitive.content)
+        assertNull(call["data"])
+    }
+
+    @Test
+    fun `estimateGas includes calldata when given`() = runTest {
+        result("0xd6d8")
+
+        client.estimateGas(ADDRESS, OTHER_ADDRESS, BigInteger.ZERO, data = "0xa9059cbb")
+
+        val call = takeBody().getValue("params").jsonArray.single().jsonObject
+        assertEquals("0xa9059cbb", call.getValue("data").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `estimateGas accepts empty calldata`() = runTest {
+        result("0x5208")
+
+        client.estimateGas(ADDRESS, OTHER_ADDRESS, BigInteger.ONE, data = "0x")
+
+        val call = takeBody().getValue("params").jsonArray.single().jsonObject
+        assertEquals("0x", call.getValue("data").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `estimateGas rejects malformed input without calling the node`() = runTest {
+        assertFailsWith<IllegalArgumentException> { client.estimateGas("0x1", OTHER_ADDRESS, BigInteger.ONE) }
+        assertFailsWith<IllegalArgumentException> { client.estimateGas(ADDRESS, "0x1", BigInteger.ONE) }
+        assertFailsWith<IllegalArgumentException> { client.estimateGas(ADDRESS, OTHER_ADDRESS, BigInteger.ONE, "0xabc") }
+        assertFailsWith<IllegalArgumentException> { client.estimateGas(ADDRESS, OTHER_ADDRESS, BigInteger.valueOf(-1)) }
+
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `maxPriorityFeePerGas parses the hex quantity`() = runTest {
+        result("0x3b9aca00")
+
+        assertEquals(BigInteger.valueOf(1_000_000_000), client.maxPriorityFeePerGas())
+        assertEquals("eth_maxPriorityFeePerGas", takeBody().getValue("method").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `latestBaseFee is read from the latest block without transactions`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"number":"0x1","baseFeePerGas":"0x3b9aca00"}}""")
+
+        assertEquals(BigInteger.valueOf(1_000_000_000), client.latestBaseFee())
+
+        val params = takeBody().getValue("params").jsonArray
+        assertEquals("latest", params[0].jsonPrimitive.content)
+        assertEquals(false, params[1].jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun `latestBaseFee fails on a block without baseFeePerGas`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"result":{"number":"0x1"}}""")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.latestBaseFee() }
+    }
+
+    @Test
+    fun `latestBaseFee fails when the result is not a block`() = runTest {
+        result("0x1")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.latestBaseFee() }
+    }
+
+    @Test
+    fun `call sends to and data at the latest block and returns the raw result`() = runTest {
+        result("0x000000000000000000000000000000000000000000000000000000000000000a")
+
+        val raw = client.call(ADDRESS, "0x70a08231")
+
+        assertEquals("0x" + "0".repeat(62) + "0a", raw)
+        val params = takeBody().getValue("params").jsonArray
+        val call = params[0].jsonObject
+        assertEquals(ADDRESS, call.getValue("to").jsonPrimitive.content)
+        assertEquals("0x70a08231", call.getValue("data").jsonPrimitive.content)
+        assertEquals("latest", params[1].jsonPrimitive.content)
+    }
+
+    @Test
+    fun `call accepts an empty result`() = runTest {
+        result("0x")
+
+        assertEquals("0x", client.call(ADDRESS, "0x70a08231"))
+    }
+
+    @Test
+    fun `call that reverts keeps the revert data`() = runTest {
+        enqueue("""{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted","data":"0x08c379a0"}}""")
+
+        val e = assertFailsWith<JsonRpcException.Node> { client.call(ADDRESS, "0x70a08231") }
+
+        assertEquals("0x08c379a0", e.data?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `call rejects a non-hex result`() = runTest {
+        result("hello")
+
+        assertFailsWith<JsonRpcException.Malformed> { client.call(ADDRESS, "0x70a08231") }
+    }
+
+    @Test
+    fun `call rejects malformed input without calling the node`() = runTest {
+        assertFailsWith<IllegalArgumentException> { client.call("0x1", "0x70a08231") }
+        assertFailsWith<IllegalArgumentException> { client.call(ADDRESS, "70a08231") }
+        assertFailsWith<IllegalArgumentException> { client.call(ADDRESS, "0x7") }
+
+        assertEquals(0, server.requestCount)
+    }
+
     private companion object {
         const val ADDRESS = "0x0123456789abcdef0123456789abcdef01234567"
+        const val OTHER_ADDRESS = "0x89abcdef0123456789abcdef0123456789abcdef"
     }
 }

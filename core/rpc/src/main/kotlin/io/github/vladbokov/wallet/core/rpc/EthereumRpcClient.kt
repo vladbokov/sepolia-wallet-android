@@ -4,14 +4,18 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import retrofit2.HttpException
 import java.math.BigInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Typed wrapper over the Ethereum execution-layer JSON-RPC API.
- * Currently reads the chain id and account balances.
+ * Reads account state (balance, nonce), the inputs of an EIP-1559 fee (gas estimate, base fee, priority fee)
+ * and performs read-only contract calls.
  *
  * Failures of the call itself are reported as [JsonRpcException]; transport failures stay `IOException`.
  */
@@ -35,18 +39,93 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
      * @throws IllegalArgumentException if [address] is not in that format.
      */
     suspend fun getBalance(address: String): BigInteger {
-        require(ADDRESS.matches(address)) { "Invalid address: '$address'" }
+        requireAddress(address)
         return quantity("eth_getBalance", JsonPrimitive(address), JsonPrimitive("latest"))
     }
 
-    private suspend fun quantity(method: String, vararg params: JsonElement): BigInteger {
-        val result = required(method, *params)
+    /**
+     * Number of transactions sent from [address], i.e. the nonce for its next transaction.
+     * Counts transactions still in the mempool ("pending"), so two quick sends don't reuse a nonce.
+     * @throws IllegalArgumentException if [address] is not a 20-byte hex address.
+     */
+    suspend fun getTransactionCount(address: String): BigInteger {
+        requireAddress(address)
+        return quantity("eth_getTransactionCount", JsonPrimitive(address), JsonPrimitive("pending"))
+    }
+
+    /**
+     * Gas units the node expects a transfer of [value] wei from [from] to [to] to use.
+     * This is an estimate for the current state: add a safety margin when building a real transaction,
+     * since the state may change before it is included in a block.
+     * @param data calldata as `0x`-prefixed hex, for contract calls such as an ERC-20 transfer.
+     * @throws IllegalArgumentException if an address or [data] is malformed, or [value] is negative.
+     * @throws JsonRpcException.Node if the node expects the transaction to fail (e.g. revert or insufficient funds).
+     */
+    suspend fun estimateGas(from: String, to: String, value: BigInteger, data: String? = null): BigInteger {
+        requireAddress(from)
+        requireAddress(to)
+        require(data == null || HEX_DATA.matches(data)) { "Invalid calldata: '$data'" }
+        return quantity(
+            "eth_estimateGas",
+            buildJsonObject {
+                put("from", from)
+                put("to", to)
+                put("value", value.toHexQuantity())
+                if (data != null) put("data", data)
+            },
+        )
+    }
+
+    /** Priority fee (tip) per gas, in wei, that the node suggests to get a transaction included soon. */
+    suspend fun maxPriorityFeePerGas(): BigInteger = quantity("eth_maxPriorityFeePerGas")
+
+    /** Base fee per gas of the latest block, in wei (EIP-1559). The next block's base fee moves at most 12.5%. */
+    suspend fun latestBaseFee(): BigInteger {
+        val block = required("eth_getBlockByNumber", JsonPrimitive("latest"), JsonPrimitive(false))
+        if (block !is JsonObject) {
+            throw JsonRpcException.Malformed("Expected a block object in eth_getBlockByNumber response")
+        }
+        val baseFee = block["baseFeePerGas"]
+            ?: throw JsonRpcException.Malformed("Latest block has no baseFeePerGas (node without EIP-1559)")
+        return parseQuantity("eth_getBlockByNumber", baseFee)
+    }
+
+    /**
+     * Read-only contract call: the node executes it locally and returns the raw result as `0x`-prefixed hex
+     * (`0x` when there is none). Nothing is signed or sent to the network.
+     *
+     * `0x` is also what a call to an address without contract code returns, so a caller that expects data
+     * must treat an empty result as "no such contract or function", not as a valid value.
+     * @throws IllegalArgumentException if [to] or [data] is malformed.
+     * @throws JsonRpcException.Node if the call reverts; [JsonRpcException.Node.data] holds the revert data.
+     */
+    suspend fun call(to: String, data: String): String {
+        requireAddress(to)
+        require(HEX_DATA.matches(data)) { "Invalid calldata: '$data'" }
+        val result = required(
+            "eth_call",
+            buildJsonObject {
+                put("to", to)
+                put("data", data)
+            },
+            JsonPrimitive("latest"),
+        )
+        if (result !is JsonPrimitive || !result.isString || !HEX_DATA.matches(result.content)) {
+            throw JsonRpcException.Malformed("Expected hex data in eth_call response")
+        }
+        return result.content
+    }
+
+    private suspend fun quantity(method: String, vararg params: JsonElement): BigInteger =
+        parseQuantity(method, required(method, *params))
+
+    private fun parseQuantity(method: String, element: JsonElement): BigInteger {
         // A JSON number like 5 would otherwise be read as the hex string "5" and silently give a wrong value.
-        if (result !is JsonPrimitive || !result.isString) {
+        if (element !is JsonPrimitive || !element.isString) {
             throw JsonRpcException.Malformed("Expected a hex string in $method response")
         }
         return try {
-            result.content.hexToBigInteger()
+            element.content.hexToBigInteger()
         } catch (e: IllegalArgumentException) {
             throw JsonRpcException.Malformed("Malformed quantity in $method response", e)
         }
@@ -82,7 +161,12 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
         }
     }
 
+    private fun requireAddress(address: String) {
+        require(ADDRESS.matches(address)) { "Invalid address: '$address'" }
+    }
+
     private companion object {
         val ADDRESS = Regex("0x[0-9a-fA-F]{40}")
+        val HEX_DATA = Regex("0x([0-9a-fA-F]{2})*")
     }
 }
