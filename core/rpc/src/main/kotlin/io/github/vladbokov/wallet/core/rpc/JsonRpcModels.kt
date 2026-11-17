@@ -2,6 +2,7 @@ package io.github.vladbokov.wallet.core.rpc
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -18,7 +19,7 @@ data class JsonRpcRequest(
     val params: JsonArray,
     val id: Long,
     // Must always be encoded: by default kotlinx.serialization skips fields equal to their default.
-    @EncodeDefault val jsonRpc: String = "2.0",
+    @EncodeDefault @SerialName("jsonrpc") val jsonRpc: String = "2.0",
 )
 
 /**
@@ -28,7 +29,7 @@ data class JsonRpcRequest(
 @Serializable
 data class JsonRpcResponse(
     val id: Long? = null,
-    val jsonRpc: String? = null,
+    @SerialName("jsonrpc") val jsonRpc: String? = null,
     val result: JsonElement? = null,
     val error: JsonRpcError? = null,
 )
