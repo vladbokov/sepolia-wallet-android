@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 
 /** Json configuration for talking to nodes: they add fields we don't model (e.g. extra error details). */
-val RpcJson: Json = Json { ignoreUnknownKeys = true }
+internal val RpcJson: Json = Json { ignoreUnknownKeys = true }
 
 /** JSON-RPC 2.0 request envelope. Every Ethereum node call is a POST with this body. */
 @OptIn(ExperimentalSerializationApi::class)
