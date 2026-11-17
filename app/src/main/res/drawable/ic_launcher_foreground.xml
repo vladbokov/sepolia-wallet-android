@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Upper pyramid -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54,25 L37,54 L54,64 Z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.7" android:pathData="M54,25 L71,54 L54,64 Z" />
+    <path android:fillColor="#2E2A6B" android:fillAlpha="0.25" android:pathData="M54,46 L37,54 L54,64 Z" />
+    <path android:fillColor="#2E2A6B" android:fillAlpha="0.35" android:pathData="M54,46 L71,54 L54,64 Z" />
+    <!-- Lower chevron -->
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.85" android:pathData="M37,58 L54,68 L54,83 Z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55" android:pathData="M71,58 L54,68 L54,83 Z" />
+    <!-- Testnet badge dot -->
+    <path android:fillColor="#7CF2C4" android:pathData="M73,73 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>
