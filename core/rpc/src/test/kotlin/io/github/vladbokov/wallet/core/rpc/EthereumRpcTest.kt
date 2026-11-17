@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class EthereumRpcTest {
-
     @Test
     fun `base url gets a trailing slash`() {
         assertEquals("https://node.example/v2/key/", "https://node.example/v2/key".toRpcBaseUrl().toString())

@@ -6,7 +6,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class HexTest {
-
     @Test
     fun `parses quantities with and without prefix`() {
         assertEquals(BigInteger.valueOf(21_000), "0x5208".hexToBigInteger())

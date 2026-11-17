@@ -19,8 +19,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * Failures of the call itself are reported as [JsonRpcException]; transport failures stay `IOException`.
  */
-class EthereumRpcClient(private val api: JsonRpcApi) {
-
+class EthereumRpcClient(
+    private val api: JsonRpcApi,
+) {
     private val nextId = AtomicLong(1)
 
     /** @throws JsonRpcException.Malformed if the id does not fit in a [Long]. */
@@ -61,7 +62,12 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
      * @throws IllegalArgumentException if an address or [data] is malformed, or [value] is negative.
      * @throws JsonRpcException.Node if the node expects the transaction to fail (e.g. revert or insufficient funds).
      */
-    suspend fun estimateGas(from: String, to: String, value: BigInteger, data: String? = null): BigInteger {
+    suspend fun estimateGas(
+        from: String,
+        to: String,
+        value: BigInteger,
+        data: String? = null,
+    ): BigInteger {
         requireAddress(from)
         requireAddress(to)
         require(data == null || HEX_DATA.matches(data)) { "Invalid calldata: '$data'" }
@@ -85,8 +91,9 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
         if (block !is JsonObject) {
             throw JsonRpcException.Malformed("Expected a block object in eth_getBlockByNumber response")
         }
-        val baseFee = block["baseFeePerGas"]
-            ?: throw JsonRpcException.Malformed("Latest block has no baseFeePerGas (node without EIP-1559)")
+        val baseFee =
+            block["baseFeePerGas"]
+                ?: throw JsonRpcException.Malformed("Latest block has no baseFeePerGas (node without EIP-1559)")
         return parseQuantity("eth_getBlockByNumber", baseFee)
     }
 
@@ -99,17 +106,21 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
      * @throws IllegalArgumentException if [to] or [data] is malformed.
      * @throws JsonRpcException.Node if the call reverts; [JsonRpcException.Node.data] holds the revert data.
      */
-    suspend fun call(to: String, data: String): String {
+    suspend fun call(
+        to: String,
+        data: String,
+    ): String {
         requireAddress(to)
         require(HEX_DATA.matches(data)) { "Invalid calldata: '$data'" }
-        val result = required(
-            "eth_call",
-            buildJsonObject {
-                put("to", to)
-                put("data", data)
-            },
-            JsonPrimitive("latest"),
-        )
+        val result =
+            required(
+                "eth_call",
+                buildJsonObject {
+                    put("to", to)
+                    put("data", data)
+                },
+                JsonPrimitive("latest"),
+            )
         return hexResult("eth_call", result, HEX_DATA, "hex data")
     }
 
@@ -153,10 +164,15 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
         }
     }
 
-    private suspend fun quantity(method: String, vararg params: JsonElement): BigInteger =
-        parseQuantity(method, required(method, *params))
+    private suspend fun quantity(
+        method: String,
+        vararg params: JsonElement,
+    ): BigInteger = parseQuantity(method, required(method, *params))
 
-    private fun parseQuantity(method: String, element: JsonElement): BigInteger {
+    private fun parseQuantity(
+        method: String,
+        element: JsonElement,
+    ): BigInteger {
         // A JSON number like 5 would otherwise be read as the hex string "5" and silently give a wrong value.
         if (element !is JsonPrimitive || !element.isString) {
             throw JsonRpcException.Malformed("Expected a hex string in $method response")
@@ -168,18 +184,24 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
         }
     }
 
-    private suspend fun required(method: String, vararg params: JsonElement): JsonElement =
-        request(method, *params) ?: throw JsonRpcException.Malformed("Empty result for $method")
+    private suspend fun required(
+        method: String,
+        vararg params: JsonElement,
+    ): JsonElement = request(method, *params) ?: throw JsonRpcException.Malformed("Empty result for $method")
 
-    private suspend fun request(method: String, vararg params: JsonElement): JsonElement? {
+    private suspend fun request(
+        method: String,
+        vararg params: JsonElement,
+    ): JsonElement? {
         val id = nextId.getAndIncrement()
-        val response = try {
-            api.call(JsonRpcRequest(method, JsonArray(params.toList()), id))
-        } catch (e: HttpException) {
-            throw JsonRpcException.Http(e.code(), e.nodeError(), e)
-        } catch (e: SerializationException) {
-            throw JsonRpcException.Malformed("Malformed response from RPC endpoint", e)
-        }
+        val response =
+            try {
+                api.call(JsonRpcRequest(method, JsonArray(params.toList()), id))
+            } catch (e: HttpException) {
+                throw JsonRpcException.Http(e.code(), e.nodeError(), e)
+            } catch (e: SerializationException) {
+                throw JsonRpcException.Malformed("Malformed response from RPC endpoint", e)
+            }
         // A null id is allowed: nodes answer with it when they could not even parse the request.
         if (response.id != null && response.id != id) {
             throw JsonRpcException.Malformed("Response id ${response.id} does not match request id $id")
@@ -199,15 +221,19 @@ class EthereumRpcClient(private val api: JsonRpcApi) {
     }
 
     /** Reads a string result that must match [format]; [what] names the expected value in the error message. */
-    private fun hexResult(method: String, element: JsonElement, format: Regex, what: String): String {
+    private fun hexResult(
+        method: String,
+        element: JsonElement,
+        format: Regex,
+        what: String,
+    ): String {
         if (element !is JsonPrimitive || !element.isString || !format.matches(element.content)) {
             throw JsonRpcException.Malformed("Expected $what in $method response")
         }
         return element.content
     }
 
-    private fun JsonObject.field(name: String): JsonElement =
-        this[name] ?: throw JsonRpcException.Malformed("Receipt has no $name")
+    private fun JsonObject.field(name: String): JsonElement = this[name] ?: throw JsonRpcException.Malformed("Receipt has no $name")
 
     private fun requireAddress(address: String) {
         require(ADDRESS.matches(address)) { "Invalid address: '$address'" }
