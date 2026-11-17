@@ -15,7 +15,6 @@ import androidx.compose.ui.res.stringResource
 import io.github.vladbokov.wallet.ui.theme.WalletTheme
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
