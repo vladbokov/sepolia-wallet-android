@@ -3,7 +3,14 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
+
+val rpcUrl: String =
+    providers
+        .gradleProperty("rpcUrl")
+        .getOrElse("https://ethereum-sepolia-rpc.publicnode.com")
 
 android {
     namespace = "io.github.vladbokov.wallet"
@@ -15,10 +22,13 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "RPC_URL", "\"$rpcUrl\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -38,8 +48,12 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core:rpc"))
     implementation(project(":core:wallet"))
     implementation(libs.kotlinx.coroutines.core)
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
