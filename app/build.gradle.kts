@@ -3,7 +3,14 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
+
+val rpcUrl: String =
+    providers
+        .gradleProperty("rpcUrl")
+        .getOrElse("https://ethereum-sepolia-rpc.publicnode.com")
 
 android {
     namespace = "io.github.vladbokov.wallet"
@@ -15,15 +22,22 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "RPC_URL", "\"$rpcUrl\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests.all { it.useJUnitPlatform() }
     }
 }
 
@@ -34,6 +48,13 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core:rpc"))
+    implementation(project(":core:wallet"))
+    implementation(libs.kotlinx.coroutines.core)
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
 
@@ -42,4 +63,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
+
+    // Unlike the JVM plugin, AGP does not pick the JUnit 5 flavour of kotlin-test by itself.
+    testImplementation(libs.kotlin.test.junit5)
 }
