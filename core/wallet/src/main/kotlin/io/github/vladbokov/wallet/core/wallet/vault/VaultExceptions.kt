@@ -21,3 +21,9 @@ class VaultInvalidatedException(
 class VaultUnavailableException(
     cause: Throwable? = null,
 ) : VaultException("Cannot create a per-use biometric key: no strong biometric or secure lock screen", cause)
+
+/**
+ * The vault's storage could not be written. Nothing was changed and no key was deleted: on a failed store
+ * the previous wallet, if any, stays; on a failed wipe the wallet and its key both stay.
+ */
+class VaultStorageException : VaultException("Failed to write the vault storage")

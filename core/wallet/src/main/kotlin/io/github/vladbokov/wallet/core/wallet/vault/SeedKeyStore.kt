@@ -31,7 +31,9 @@ internal class NewSeedKey(
  * ciphertext is safely persisted, removes the old key.
  *
  * TODO: errors from the Keystore itself (KeyStoreException, UnrecoverableKeyException, ProviderException)
- *  are not mapped to [VaultException] yet; decide where the error boundary is.
+ *  are not mapped to [VaultException] yet; decide where the error boundary is. This includes [retainOnly]
+ *  failing inside SeedVault.store after the data was already saved: the caller then sees an exception
+ *  although the new wallet is stored.
  * TODO: after release, decide whether to expose where the key actually lives (StrongBox or TEE, see
  *  KeyInfo.securityLevel). generateKey silently falls back to TEE when StrongBox is unavailable; it does not
  *  affect functionality, only the hardware protection level.

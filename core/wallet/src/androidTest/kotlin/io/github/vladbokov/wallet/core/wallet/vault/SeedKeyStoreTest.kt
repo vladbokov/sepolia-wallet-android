@@ -10,7 +10,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeFalse
-import org.junit.Assume.assumeNoException
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,14 +31,7 @@ class SeedKeyStoreTest {
     @Before
     fun setUp() {
         store.delete()
-        // Skip the whole class on a device without a strong biometric instead of failing every test.
-        try {
-            store.newEncryptCipher()
-        } catch (e: VaultUnavailableException) {
-            assumeNoException("Device has no secure lock screen / strong biometric", e)
-        } finally {
-            store.delete()
-        }
+        assumeVaultKeysAvailable(store)
     }
 
     @After
