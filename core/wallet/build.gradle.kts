@@ -11,6 +11,7 @@ android {
     defaultConfig {
         // 30+ gives us KeyGenParameterSpec.setUserAuthenticationParameters (per-use biometric auth).
         minSdk = 30
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -40,4 +41,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     // Independent reference implementation of the ABI encoding, used only to cross-check Erc20 in tests.
     testImplementation(libs.web3j.abi)
+
+    // Instrumented tests run on a device or emulator: AndroidKeyStore does not exist on the JVM.
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
