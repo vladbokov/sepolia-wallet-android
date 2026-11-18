@@ -34,9 +34,10 @@ dependencies {
     implementation(libs.web3j.crypto)
     implementation(libs.web3j.utils)
     implementation(libs.web3j.rlp)
-    implementation(libs.web3j.abi)
     implementation(libs.bouncycastle.bcprov)
 
     // Unlike the JVM plugin, AGP does not pick the JUnit 5 flavour of kotlin-test by itself.
     testImplementation(libs.kotlin.test.junit5)
+    // Independent reference implementation of the ABI encoding, used only to cross-check Erc20 in tests.
+    testImplementation(libs.web3j.abi)
 }
