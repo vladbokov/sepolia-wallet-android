@@ -233,7 +233,8 @@ class EthereumRpcClient(
         return element.content
     }
 
-    private fun JsonObject.field(name: String): JsonElement = this[name] ?: throw JsonRpcException.Malformed("Receipt has no $name")
+    private fun JsonObject.field(name: String): JsonElement =
+        this[name] ?: throw JsonRpcException.Malformed("Receipt has no $name")
 
     private fun requireAddress(address: String) {
         require(ADDRESS.matches(address)) { "Invalid address: '$address'" }

@@ -18,3 +18,4 @@ rootProject.name = "sepolia-wallet"
 
 include(":app")
 include(":core:rpc")
+include(":core:wallet")
