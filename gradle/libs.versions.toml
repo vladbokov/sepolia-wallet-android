@@ -10,6 +10,8 @@ okhttp = "5.5.1"
 coroutines = "1.11.0"
 spotless = "7.2.1"
 ktlint = "1.7.1"
+web3j = "4.12.3-android"
+bouncycastle = "1.87"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -28,10 +30,20 @@ retrofit-converter-kotlinx-serialization = { module = "com.squareup.retrofit2:co
 
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5", version.ref = "kotlin" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+# The -android POMs declare no transitive dependencies, so each web3j module is listed explicitly.
+# web3j-core is left out on purpose: it brings the networking layer, and :core:wallet must never do networking.
+web3j-crypto = { module = "org.web3j:crypto", version.ref = "web3j" }
+web3j-utils = { module = "org.web3j:utils", version.ref = "web3j" }
+web3j-rlp = { module = "org.web3j:rlp", version.ref = "web3j" }
+web3j-abi = { module = "org.web3j:abi", version.ref = "web3j" }
+bouncycastle-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
