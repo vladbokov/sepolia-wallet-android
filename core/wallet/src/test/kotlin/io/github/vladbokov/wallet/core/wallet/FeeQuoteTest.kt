@@ -99,4 +99,14 @@ class FeeQuoteTest {
         assertFailsWith<IllegalArgumentException> { FeeQuote(wei(-1), wei(1), wei(1)) }
         assertFailsWith<IllegalArgumentException> { FeeQuote(wei(21_000), wei(-1), wei(1)) }
     }
+
+    @Test
+    fun `a quote beyond protocol integer sizes is rejected`() {
+        assertFailsWith<IllegalArgumentException> {
+            FeeQuote(BigInteger.TWO.pow(64), wei(1), wei(1))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            FeeQuote(wei(21_000), wei(1), BigInteger.TWO.pow(256))
+        }
+    }
 }

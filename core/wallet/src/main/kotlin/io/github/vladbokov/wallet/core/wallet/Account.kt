@@ -11,10 +11,13 @@ import org.web3j.crypto.MnemonicUtils
  * The private key never leaves this module.
  */
 class Account private constructor(
-    credentials: Credentials,
+    private val credentials: Credentials,
 ) {
     /** EIP-55 checksummed address: last 20 bytes of keccak256(public key). */
     val address: String = Keys.toChecksumAddress(credentials.address)
+
+    /** Signs [transaction] with this account's key. The key itself never leaves the account. */
+    fun sign(transaction: UnsignedTransaction): SignedTransaction = TransactionSigner.sign(transaction, credentials)
 
     companion object {
         /**

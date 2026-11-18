@@ -12,10 +12,11 @@ data class FeeQuote(
     val maxFeePerGas: BigInteger,
 ) {
     init {
-        require(gasLimit.signum() > 0) { "Gas limit must be positive" }
+        require(gasLimit.signum() > 0 && gasLimit.bitLength() <= 64) { "Gas limit must be positive and fit in uint64" }
         require(maxPriorityFeePerGas.signum() >= 0) { "maxPriorityFeePerGas must not be negative" }
         // The protocol rejects a transaction whose tip cap exceeds its total price cap.
         require(maxFeePerGas >= maxPriorityFeePerGas) { "maxFeePerGas must cover maxPriorityFeePerGas" }
+        require(maxFeePerGas.bitLength() <= 256) { "maxFeePerGas must fit in uint256" }
     }
 
     /**
