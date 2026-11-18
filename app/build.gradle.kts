@@ -25,6 +25,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests.all { it.useJUnitPlatform() }
+    }
 }
 
 kotlin {
@@ -34,6 +38,9 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core:wallet"))
+    implementation(libs.kotlinx.coroutines.core)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
 
@@ -42,4 +49,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
+
+    // Unlike the JVM plugin, AGP does not pick the JUnit 5 flavour of kotlin-test by itself.
+    testImplementation(libs.kotlin.test.junit5)
 }
