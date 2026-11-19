@@ -10,8 +10,10 @@ import io.github.vladbokov.wallet.BuildConfig
 import io.github.vladbokov.wallet.core.rpc.EthereumRpc
 import io.github.vladbokov.wallet.core.rpc.EthereumRpcClient
 import io.github.vladbokov.wallet.core.wallet.vault.SeedVault
+import io.github.vladbokov.wallet.data.WalletRepositoryImpl
 import io.github.vladbokov.wallet.domain.model.ChainConfig
 import io.github.vladbokov.wallet.domain.model.Token
+import io.github.vladbokov.wallet.domain.repository.WalletRepository
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -54,4 +56,8 @@ object AppModule {
     fun provideSeedVault(
         @ApplicationContext context: Context,
     ): SeedVault = SeedVault(context)
+
+    @Provides
+    @Singleton
+    fun provideWalletRepository(rpc: EthereumRpcClient): WalletRepository = WalletRepositoryImpl(rpc)
 }

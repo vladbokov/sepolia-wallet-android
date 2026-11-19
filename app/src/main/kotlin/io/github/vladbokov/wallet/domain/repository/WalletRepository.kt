@@ -36,6 +36,10 @@ interface WalletRepository {
     /**
      * Sends the signed transaction. Its hash is `transaction.hash`, known before the node answers, so nothing is
      * returned. If the node reports a different hash, the call fails with [DataError.MalformedResponse].
+     *
+     * [DataError.Network] here means the outcome is unknown, not that nothing was sent: the node may have accepted
+     * the transaction and the answer got lost. Do not resend blindly (a retry fails with "already known" or
+     * "nonce too low"); check [observeStatus] with `transaction.hash` first.
      */
     suspend fun broadcast(transaction: SignedTransaction)
 
