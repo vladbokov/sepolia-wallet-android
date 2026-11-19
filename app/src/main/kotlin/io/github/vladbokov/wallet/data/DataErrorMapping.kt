@@ -38,7 +38,7 @@ internal fun JsonRpcException.toDataError(): DataError =
             // Clients word these differently ("nonce too low", "insufficient funds for gas * price + value",
             // "InsufficientFunds"), so only letters are compared. The list grows as new clients are met; an
             // unknown wording degrades to a generic Rpc error.
-            val text = message.orEmpty().filter(Char::isLetter).lowercase()
+            val text = message.lettersOnly()
             when {
                 "noncetoolow" in text -> DataError.NonceTooLow()
                 "insufficientfunds" in text -> DataError.RejectedInsufficientFunds()
@@ -46,3 +46,8 @@ internal fun JsonRpcException.toDataError(): DataError =
             }
         }
     }
+
+/** The node already holds this very transaction ("already known", "AlreadyKnown"): same hash, nothing to do. */
+internal fun DataError.Rpc.isAlreadyKnown(): Boolean = "alreadyknown" in rpcMessage.lettersOnly()
+
+private fun String?.lettersOnly(): String = orEmpty().filter(Char::isLetter).lowercase()

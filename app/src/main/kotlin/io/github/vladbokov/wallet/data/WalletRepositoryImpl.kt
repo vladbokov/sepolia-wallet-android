@@ -63,7 +63,14 @@ internal class WalletRepositoryImpl(
         }
 
     override suspend fun broadcast(transaction: SignedTransaction) {
-        val nodeHash = mapErrors { rpc.sendRawTransaction(transaction.rawHex) }
+        val nodeHash =
+            try {
+                mapErrors { rpc.sendRawTransaction(transaction.rawHex) }
+            } catch (e: DataError.Rpc) {
+                // A repeat of a send whose answer was lost: the node already holds this exact transaction.
+                if (e.isAlreadyKnown()) return
+                throw e
+            }
         // The hash is fixed by the signed bytes. A different answer means the node did not take this transaction.
         if (!nodeHash.equals(transaction.hash, ignoreCase = true)) throw DataError.MalformedResponse()
     }

@@ -14,8 +14,10 @@ import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import mockwebserver3.SocketEffect
 import okhttp3.OkHttpClient
 import java.math.BigInteger
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -220,9 +222,58 @@ class WalletRepositoryImplTest {
             serve { nodeError(-32000, "InsufficientFunds") }
             assertFailsWith<DataError.RejectedInsufficientFunds> { repository.broadcast(signed) }
 
-            serve { nodeError(-32000, "already known") }
+            serve { nodeError(-32000, "replacement transaction underpriced") }
             val e = assertFailsWith<DataError.Rpc> { repository.broadcast(signed) }
             assertEquals(-32000, e.code)
+        }
+
+    @Test
+    fun `broadcast treats a transaction the node already holds as sent`() =
+        runTest {
+            // A repeat of a send whose answer was lost: same signed bytes, same hash.
+            for (message in listOf("already known", "AlreadyKnown")) {
+                serve { nodeError(-32000, message) }
+
+                repository.broadcast(signed)
+            }
+        }
+
+    // --- lost connection: the outcome of a broadcast is unknown, not "invalid response" ---
+
+    private fun repositoryWith(client: OkHttpClient) =
+        WalletRepositoryImpl(EthereumRpc.create(server.url("/v2/key").toString(), client))
+
+    @Test
+    fun `a timeout while waiting for the answer is a network error`() =
+        runTest {
+            server.dispatcher =
+                object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest) =
+                        MockResponse
+                            .Builder()
+                            .headersDelay(2, TimeUnit.SECONDS)
+                            .body("""{"jsonrpc":"2.0","id":1,"result":"$hash"}""")
+                            .build()
+                }
+            val impatient = OkHttpClient.Builder().callTimeout(300, TimeUnit.MILLISECONDS).build()
+
+            assertFailsWith<DataError.Network> { repositoryWith(impatient).broadcast(signed) }
+        }
+
+    @Test
+    fun `a connection dropped in the middle of the answer is a network error`() =
+        runTest {
+            server.dispatcher =
+                object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest) =
+                        MockResponse
+                            .Builder()
+                            .body("""{"jsonrpc":"2.0","id":1,"result":"$hash"}""")
+                            .onResponseBody(SocketEffect.CloseSocket())
+                            .build()
+                }
+
+            assertFailsWith<DataError.Network> { repositoryWith(OkHttpClient()).broadcast(signed) }
         }
 
     // --- observeStatus ---
