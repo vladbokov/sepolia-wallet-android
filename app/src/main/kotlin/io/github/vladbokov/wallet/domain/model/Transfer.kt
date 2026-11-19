@@ -68,3 +68,21 @@ sealed interface DraftResult {
         val error: TransferError,
     ) : DraftResult
 }
+
+/** Outcome of sending a signed transfer. The [hash] is known as soon as the transaction is signed. */
+sealed interface SendResult {
+    val hash: String
+
+    /** The node accepted the transaction. */
+    data class Sent(
+        override val hash: String,
+    ) : SendResult
+
+    /**
+     * The connection failed during the broadcast: the node may have taken the transaction, so it must not be sent
+     * again blindly. Track it by [hash] to find out.
+     */
+    data class Unconfirmed(
+        override val hash: String,
+    ) : SendResult
+}
